@@ -75,28 +75,16 @@ namespace SimFeedback.telemetry
         TelemetryData telemetryDataB = new TelemetryData();
         Queue<TelemetryData> telemetryQueue = new Queue<TelemetryData>();
         Stopwatch packetStopwatch = new Stopwatch();
+        private bool deQueueStarted = false;
 
-        private void Run()
+
+        private void DequeueThread()
         {
-   
-
-            UdpClient socket = new UdpClient {ExclusiveAddressUse = true};
-            socket.Client.Bind(new IPEndPoint(IPAddress.Any,_portNum));
-            var endpoint = new IPEndPoint(IPAddress.Parse(_ipAddr), _portNum);
-            Stopwatch sw = new Stopwatch();
-            sw.Start();
-            int emptyCount = -1;
-
-            var mmTimer = new System.Timers.Timer();
-            mmTimer.Interval = 100;
-
-            mmTimer.Elapsed += MmTimer_Elapsed1;
-
-            /*
-            mmTimer.Elapsed += delegate(object o, ElapsedEventArgs args)
+            while (true)
             {
-                // Dieser Timer schlägt alle 10 Millisekunden zu. Hier sollten die neuesten Daten verfügbar sein.
 
+                // Dieser Timer schlägt alle 10 Millisekunden zu. Hier sollten die neuesten Daten verfügbar sein.
+                File.AppendAllText("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " -  TIMER " + Environment.NewLine);
                 var telemetryQueueCount = telemetryQueue.Count;
 
                 if (telemetryQueueCount > 0)
@@ -108,35 +96,58 @@ namespace SimFeedback.telemetry
                 {
                     File.AppendAllText("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " -  Keine Daten mehr in Queue" + Environment.NewLine);
                 }
+                Thread.Sleep(10);
+            }
+        }
+
+        private void UdpListenerThread()
+        {
+
+
+            UdpClient socket = new UdpClient { ExclusiveAddressUse = true };
+            socket.Client.Bind(new IPEndPoint(IPAddress.Any, _portNum));
+            var endpoint = new IPEndPoint(IPAddress.Parse(_ipAddr), _portNum);
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
+
+
+            /*
+            var mmTimer = new System.Timers.Timer();
+            mmTimer.Interval = 10;
+
+
+            mmTimer.Elapsed += delegate (object o, ElapsedEventArgs args)
+            {
+                DequeueThread
             };*/
 
 
 
             // Telemetriedaten entgegennehmen
             // Eine Stoppuhr verwenden 
-            
+
 
             //mmTimer.Start();
             IsConnected = true;
             IsRunning = true;
 
 
-             while (!_isStopped)
-             {
-                 try
-                 {
+            while (!_isStopped)
+            {
+                try
+                {
 
-                     // get data from game, 
-                     if (socket.Available == 0)
-                     {
-                         if (sw.ElapsedMilliseconds > 200)
-                         {
-                             IsRunning = false;
-                             IsConnected = false;
-                             Thread.Sleep(1000);
-                         }
-                         continue;
-                     }
+                    // get data from game, 
+                    if (socket.Available == 0)
+                    {
+                        if (sw.ElapsedMilliseconds > 200)
+                        {
+                            IsRunning = false;
+                            IsConnected = false;
+                            Thread.Sleep(1000);
+                        }
+                        continue;
+                    }
                     IsConnected = true;
                     IsRunning = true;
 
@@ -154,14 +165,14 @@ namespace SimFeedback.telemetry
                         File.AppendAllText("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " -  setzte telemetry data A" + Environment.NewLine);
                         telemetryDataA = ParseReponse(Encoding.UTF8.GetString(socket.Receive(ref endpoint)));
                         packetStopwatch.Start();    // Erster Datensatz gelesen, warte auf zweiten
-                        
+
                     }
                     else
                     {
                         // Der Erste Datensatz war bereits gesetzt.
                         packetStopwatch.Stop();
                         var elapsedMillisecondsBetweenPackets = packetStopwatch.ElapsedMilliseconds;
-                        File.AppendAllText("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " -  setzte telemetry data B (" + elapsedMillisecondsBetweenPackets + " Millisekunden später) " + Environment.NewLine );
+                        File.AppendAllText("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " -  setzte telemetry data B (" + elapsedMillisecondsBetweenPackets + " Millisekunden später) " + Environment.NewLine);
                         telemetryDataB = ParseReponse(Encoding.UTF8.GetString(socket.Receive(ref endpoint)));
 
                         // Hier alle fehlenden Daten dazwischen interpolieren
@@ -181,7 +192,19 @@ namespace SimFeedback.telemetry
                         packetStopwatch.Reset();
 
                         // Nach dem ersten interpolieren eigene Frequenz starten:
-                        mmTimer.Start();
+                        //mmTimer.Start();
+                        if (!deQueueStarted)
+                        {
+                            File.AppendAllText("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " -  Starting Dequeue" + Environment.NewLine);
+                            deQueueStarted = true;
+
+                            var m_ListeningThread = new Thread(DequeueThread);
+                            m_ListeningThread.IsBackground = false;
+                            m_ListeningThread.Start();
+
+                            //mmTimer.Start();
+                        }
+
 
                     }
 
@@ -194,26 +217,19 @@ namespace SimFeedback.telemetry
                     IsRunning = false;
                     Thread.Sleep(1000);
                 }
-             }
+            }
             IsConnected = false;
             IsRunning = false;
         }
+        
 
-        private void MmTimer_Elapsed1(object sender, ElapsedEventArgs e)
+        private void Run()
         {
-            // Dieser Timer schlägt alle 10 Millisekunden zu. Hier sollten die neuesten Daten verfügbar sein.
+            var m_ListeningThread = new Thread(UdpListenerThread);
+            m_ListeningThread.IsBackground = false;
+            m_ListeningThread.Start();
 
-            var telemetryQueueCount = telemetryQueue.Count;
 
-            if (telemetryQueueCount > 0)
-            {
-                File.AppendAllText("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " -  Queue Count " + telemetryQueueCount + Environment.NewLine);
-                RaiseEvent(OnTelemetryUpdate, new TelemetryEventArgs(new AeroflyFS2TelemetryInfo(telemetryQueue.Dequeue(), lastTelemetryData)));
-            }
-            else
-            {
-                File.AppendAllText("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " -  Keine Daten mehr in Queue" + Environment.NewLine);
-            }
         }
 
         private List<TelemetryData> interpolateBetween(TelemetryData telemetryDataA, TelemetryData telemetryDataB, long elapsedMillisecondsBetweenPackets)
@@ -243,10 +259,6 @@ namespace SimFeedback.telemetry
             return interpolatedElems;
         }
 
-        private void MmTimer_Elapsed(object sender, MultimediaElapsedEventArgs e)
-        {
-            throw new NotImplementedException();
-        }
 
         private TelemetryData ParseReponse(string resp)
         {

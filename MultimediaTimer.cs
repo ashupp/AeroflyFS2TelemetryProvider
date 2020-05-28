@@ -1,371 +1,152 @@
 ﻿using System;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
-using System.Diagnostics;
- 
-namespace System.Timers
+
+public class MultimediaTimer : IDisposable
 {
-    // Summary:
-    //     Represents the method that will handle the
-    //     System.Timers.MultimediaTimer.Elapsed event
-    //     of a System.Timers.MultimediaTimer.
-    //
-    // Parameters:
-    //   sender:
-    //     The source of the event.
-    //
-    //   e:
-    //     An System.Timers.MultimediaElapsedEventHandler object that contains
-    //     the event data.
-    public delegate void MultimediaElapsedEventHandler(object sender,
-                                                MultimediaElapsedEventArgs e);
- 
-    // Summary:
-    //     Provides data for the System.Timers.Timer.Elapsed event.
-    public class MultimediaElapsedEventArgs : EventArgs
+    private bool disposed = false;
+    private int interval, resolution;
+    private UInt32 timerId;
+
+    // Hold the timer callback to prevent garbage collection.
+    private readonly MultimediaTimerCallback Callback;
+
+    public MultimediaTimer()
     {
-        // Summary:
-        //     Gets the time the System.Timers.Multimedia.Elapsed event was 
-        //     raised.
-        //
-        // Returns:
-        //     The time the System.Timers.Multimedia.Elapsed event was raised.
-        public DateTime SignalTime { get; internal set; }
- 
-        internal MultimediaElapsedEventArgs()
+        Callback = new MultimediaTimerCallback(TimerCallbackMethod);
+        Resolution = 5;
+        Interval = 10;
+    }
+
+    ~MultimediaTimer()
+    {
+        Dispose(false);
+    }
+
+    public int Interval
+    {
+        get
         {
-            SignalTime = DateTime.Now;
+            return interval;
+        }
+        set
+        {
+            CheckDisposed();
+
+            if (value < 0)
+                throw new ArgumentOutOfRangeException("value");
+
+            interval = value;
+            if (Resolution > Interval)
+                Resolution = value;
         }
     }
-    
-    // Summary:
-    //     Generates recurring events in an application.
-    public class MultimediaTimer : IDisposable
+
+    // Note minimum resolution is 0, meaning highest possible resolution.
+    public int Resolution
     {
-        //Lib API declarations
-        /// <summary>
-        /// Times the set event.
-        /// </summary>
-        /// <param name="uDelay">The u delay.</param>
-        /// <param name="uResolution">The u resolution.</param>
-        /// <param name="lpTimeProc">The lp time proc.</param>
-        /// <param name="dwUser">The dw user.</param>
-        /// <param name="fuEvent">The fu event.</param>
-        /// <returns></returns>
-        [DllImport("Winmm.dll", CharSet = CharSet.Auto)]
-        private static extern uint timeSetEvent(uint uDelay, uint uResolution,
-                      TimerCallback lpTimeProc, UIntPtr dwUser, uint fuEvent);
- 
-        /// <summary>
-        /// Times the kill event.
-        /// </summary>
-        /// <param name="uTimerID">The u timer ID.</param>
-        /// <returns></returns>
-        [DllImport("Winmm.dll", CharSet = CharSet.Auto)]
-        private static extern uint timeKillEvent(uint uTimerID);
- 
-        /// <summary>
-        /// Times the get time.
-        /// </summary>
-        /// <returns></returns>
-        [DllImport("Winmm.dll", CharSet = CharSet.Auto)]
-        private static extern uint timeGetTime();
- 
-        /// <summary>
-        /// Times the begin period.
-        /// </summary>
-        /// <param name="uPeriod">The u period.</param>
-        /// <returns></returns>
-        [DllImport("Winmm.dll", CharSet = CharSet.Auto)]
-        private static extern uint timeBeginPeriod(uint uPeriod);
- 
-        /// <summary>
-        /// Times the end period.
-        /// </summary>
-        /// <param name="uPeriod">The u period.</param>
-        /// <returns></returns>
-        [DllImport("Winmm.dll", CharSet = CharSet.Auto)]
-        private static extern uint timeEndPeriod(uint uPeriod);
- 
-        
-        /// <summary>
-        ///Timer type definitions
-        /// </summary>
-        [Flags]
-        public enum fuEvent : uint
+        get
         {
-            /// <summary>
-            /// OneHzSignalEvent occurs once, after uDelay milliseconds. 
-            /// </summary>
-            TIME_ONESHOT = 0,     
-            /// <summary>
-            /// 
-            /// </summary>
-            TIME_PERIODIC = 1,
-            /// <summary>
-            ///  callback is function
-            /// </summary>
-            TIME_CALLBACK_FUNCTION = 0x0000,  
- 
+            return resolution;
         }
- 
-        /// <summary>
-        /// Delegate definition for the API callback
-        /// </summary>
-        private delegate void TimerCallback(uint uTimerID, uint uMsg,
-                                    UIntPtr dwUser, UIntPtr dw1, UIntPtr dw2);
- 
-        /// <summary>
-        /// The current timer instance ID
-        /// </summary>
-        private uint id = 0;
- 
-        /// <summary>
-        /// The callback used by the the API
-        /// </summary>
-        private TimerCallback timerCallback;
+        set
+        {
+            CheckDisposed();
 
-        /// <summary>
-        /// Garbace Collector handle
-        /// </summary>
-        private GCHandle _gcHandle;
+            if (value < 0)
+                throw new ArgumentOutOfRangeException("value");
 
-        /// <summary>
-        /// Initializes a new instance of the System.Timers.MultimediaTimer 
-        //  class, and sets all the properties to their initial values.
-        /// </summary>
-        public MultimediaTimer()
-        {
-            Interval = 100;
-            AutoReset = true;
-            Enabled = false;
-            //Initialize the API callback
-            timerCallback = CallbackFunction;
+            resolution = value;
         }
-        
-        /// <summary>
-        ///    Initializes a new instance of the System.Timers.MultimediaTimer 
-        ///    class, and sets the
-        ///    System.Timers.MultimediaTimer.Interval property to the specified 
-        ///    time period.
-        ///
-        /// Parameters:
-        ///   interval:
-        ///     The time, in milliseconds, between events.
-        ///
-        /// Exceptions:
-        ///   System.ArgumentException:
-        ///     The value of the interval parameter is less than or equal to 
-        ///     zero, or greater than System.Int32.MaxValue.
-        /// </summary>
-        /// <param name="interval">The interval.</param>
-        public MultimediaTimer(uint interval)
+    }
+
+    public bool IsRunning
+    {
+        get { return timerId != 0; }
+    }
+
+    public void Start()
+    {
+        CheckDisposed();
+
+        if (IsRunning)
+            throw new InvalidOperationException("Timer is already running");
+
+        // Event type = 0, one off event
+        // Event type = 1, periodic event
+        UInt32 userCtx = 0;
+        timerId = NativeMethods.TimeSetEvent((uint)Interval, (uint)Resolution, Callback, ref userCtx, 1);
+        if (timerId == 0)
         {
-            Interval = interval;
-            AutoReset = true;
-            Enabled = false;
-            //Initialize the API callback
-            _gcHandle = GCHandle.Alloc(timerCallback);
-            timerCallback = CallbackFunction;
+            int error = Marshal.GetLastWin32Error();
+            throw new Win32Exception(error);
         }
- 
-        
-        /// <summary>
-        /// Gets or sets a value indicating whether the 
-        /// System.Timers.MultimediaTimer should raise
-        /// the System.Timers.MultimediaTimer.Elapsed event each time the 
-        /// specified interval elapses
-        /// or only after the first time it elapses.
-        ///
-        /// Returns:
-        ///     true if the System.Timers.MultimediaTimer should raise the 
-        ///     System.Timers.MultimediaTimer.Elapsed
-        ///     event each time the interval elapses; false if it should raise 
-        ///     the System.Timers.MultimediaTimer.Elapsed
-        ///     event only once, after the first time the interval elapses. The 
-        ///     default is true.
-        /// </summary>
-        /// <value><c>true</c> if [auto reset]; otherwise, <c>false</c>.</value>
-        public bool AutoReset { get; set; }
-        
-        /// <summary>
-        /// Gets or sets a value indicating whether the 
-        /// System.Timers.MultimediaTimer should raise
-        /// the System.Timers.MultimediaTimer.Elapsed event.
-        ///
-        /// Returns:
-        ///     true if the System.Timers.MultimediaTimer should raise the 
-        ///     System.Timers.MultimediaTimer.Elapsed
-        ///     event; otherwise, false. The default is false.
-        ///        
-        /// </summary>
-        /// <value><c>true</c> if enabled; otherwise, <c>false</c>.</value>
-        public bool Enabled { get; private set; }
- 
-        private object syncLock = new object();
- 
-        /// <summary>
-        /// Gets or sets the interval at which to raise the    
-        /// System.Timers.MultimediaTimer.Elapsed event.
-        ///
-        /// Returns:
-        ///     The time, in milliseconds, between raisings of the 
-        ///     System.Timers.MultimediaTimer.Elapsed
-        ///     event. The default is 100 milliseconds.
-        ///
-        /// Exceptions:
-        ///   System.ArgumentException:
-        ///     The interval is less than or equal to zero.
-        /// </summary>
-        /// <value>The interval.</value>
-        public uint Interval { get; set; }         
-       
-            
-        /// <summary>
-        /// Occurs when the interval elapses.  
-        /// </summary>
-        public event MultimediaElapsedEventHandler Elapsed;
- 
-       
-        /// <summary>
-        /// Releases the resources used by the System.Timers.MultimediaTimer.
-        /// </summary>
-        public void Close()
+    }
+
+    public void Stop()
+    {
+        CheckDisposed();
+
+        if (!IsRunning)
+            throw new InvalidOperationException("Timer has not been started");
+
+        StopInternal();
+    }
+
+    private void StopInternal()
+    {
+        NativeMethods.TimeKillEvent(timerId);
+        timerId = 0;
+    }
+
+    public event EventHandler Elapsed;
+
+    public void Dispose()
+    {
+        Dispose(true);
+    }
+
+    private void TimerCallbackMethod(uint id, uint msg, ref uint userCtx, uint rsv1, uint rsv2)
+    {
+        var handler = Elapsed;
+        if (handler != null)
         {
-            Dispose();
+            handler(this, EventArgs.Empty);
         }
-                       
-          
-        /// <summary>
-        /// Starts raising the System.Timers.MultimediaTimer.Elapsed event by 
-        /// setting System.Timers.MultimediaTimer.Enabled
-        /// to true.
-        ///
-        /// Exceptions:
-        ///   System.ArgumentOutOfRangeException:
-        ///     The System.Timers.MultimediaTimer is created with an interval 
-        ///     equal to or greater than
-        ///     System.Int32.MaxValue + 1, or set to an interval less than zero.
-        /// </summary>
-        public void Start()
+    }
+
+    private void CheckDisposed()
+    {
+        if (disposed)
+            throw new ObjectDisposedException("MultimediaTimer");
+    }
+
+    private void Dispose(bool disposing)
+    {
+        if (disposed)
+            return;
+
+        disposed = true;
+        if (IsRunning)
         {
-            lock (syncLock)
-            {
-                //Kill any existing timer
-                Stop();
-                Enabled = false;
- 
-                //Set the timer type flags
-                fuEvent f = fuEvent.TIME_CALLBACK_FUNCTION | (AutoReset ? fuEvent.TIME_PERIODIC : fuEvent.TIME_ONESHOT);
-                            
-                id = timeSetEvent(Interval, 0, timerCallback, UIntPtr.Zero, (uint) f);
-                if (id == 0)
-                {
-                    throw new Exception("timeSetEvent error");
-                }
-                Debug.WriteLine("MultimediaTimer " + id.ToString() + " started");
-                Enabled = true;
-            }
+            StopInternal();
         }
- 
-          
-        /// <summary>
-        /// Stops raising the System.Timers.MultimediaTimer.Elapsed event by 
-        /// setting System.Timers.MultimediaTimer.Enabled
-        ///  to false.
-        /// </summary>
-        public void Stop()
+
+        if (disposing)
         {
-            lock (syncLock)
-            {
-                if (id != 0)
-                {
-                    timeKillEvent(id);
-                    Debug.WriteLine("MultimediaTimer " + id.ToString() + " stopped");
-                    id = 0;
-                    Enabled = false;
-                }
-            }
-        }
- 
-        /// <summary>
-        /// Called when [timer].
-        /// </summary>
-        protected virtual void OnTimer()
-        {
-            if (Elapsed != null)
-            {
-                Elapsed(this, new MultimediaElapsedEventArgs());
-            }
-        }
- 
-        /// <summary>
-        /// CBs the func.
-        /// </summary>
-        /// <param name="uTimerID">The u timer ID.</param>
-        /// <param name="uMsg">The u MSG.</param>
-        /// <param name="dwUser">The dw user.</param>
-        /// <param name="dw1">The DW1.</param>
-        /// <param name="dw2">The DW2.</param>
-        private void CallbackFunction(uint uTimerID, uint uMsg, UIntPtr dwUser,
-                                                      UIntPtr dw1, UIntPtr dw2)
-        {
-            //Callback from the MultimediaTimer API that fires the Timer event. 
-            // Note we are in a different thread here
-            OnTimer();
-        }
- 
-        #region IDisposable Members
- 
-        private bool _disposed = false;     
-        
- 
-        /// <summary>
-        /// Performs application-defined tasks associated with freeing, 
-        ///  releasing, or resetting unmanaged resources.
-        /// Releases all resources used by the current 
-        /// System.Timers.MultimediaTimer.
-        ///
-        /// Parameters:
-        ///   disposing:
-        ///     true to release both managed and unmanaged resources; false to 
-        ///     release only
-        ///     unmanaged resources.
-        /// </summary>
-        public void Dispose()
-        {
-            Dispose(true);
+            Elapsed = null;
             GC.SuppressFinalize(this);
-            _gcHandle.Free();
         }
- 
-        /// <summary>
-        /// Releases unmanaged and - optionally - managed resources
-        /// </summary>
-        /// <param name="disposing"><c>true</c> to release both managed and 
-        ///    unmanaged resources; <c>false</c> to release only unmanaged 
-        ///  resources.</param>
-        private void Dispose(bool disposing)
-        {
-            if (!_disposed)
-            {
-                if (disposing)
-                {
-                    Stop();
-                }
-            }
-            _disposed = true;
-        }
- 
-        /// <summary>
-        /// Releases unmanaged resources and performs other cleanup operations 
-        /// before the
-        /// <see cref="MMTimer"/> is reclaimed by garbage collection.
-        /// </summary>
-        ~MultimediaTimer()
-        {
-            Dispose(false);
-        }
- 
-        #endregion
     }
+}
+
+internal delegate void MultimediaTimerCallback(UInt32 id, UInt32 msg, ref UInt32 userCtx, UInt32 rsv1, UInt32 rsv2);
+
+internal static class NativeMethods
+{
+    [DllImport("winmm.dll", SetLastError = true, EntryPoint = "timeSetEvent")]
+    internal static extern UInt32 TimeSetEvent(UInt32 msDelay, UInt32 msResolution, MultimediaTimerCallback callback, ref UInt32 userCtx, UInt32 eventType);
+
+    [DllImport("winmm.dll", SetLastError = true, EntryPoint = "timeKillEvent")]
+    internal static extern void TimeKillEvent(UInt32 uTimerId);
 }
