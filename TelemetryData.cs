@@ -10,11 +10,7 @@ namespace SimFeedback.telemetry
         private float sway;
         private float surge;
         private float heave;
-
-        private float ax;
-        private float ay;
-        private float az;
-
+        public bool isSet;
 
         #region For SimFeedback Available Values
 
@@ -54,9 +50,18 @@ namespace SimFeedback.telemetry
             get => (surge);
             set => surge = value;
         }
-        
+
         public float AirSpeed { get; set; }
         public float GroundSpeed { get; set; }
+
+        public bool isEmptyTelemetry()
+        {
+            if (Surge == 0 && Heave == 0 & Roll == 0 && Yaw == 0 && Pitch == 0 && AirSpeed == 0 && GroundSpeed == 0 && Sway == 0 && Surge == 0)
+            {
+                return true;
+            }
+            return false;
+        }
 
         #endregion
 

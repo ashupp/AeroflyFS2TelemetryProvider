@@ -54,6 +54,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="MultimediaTimer.cs" />
     <Compile Include="TelemetryData.cs" />
     <Compile Include="TelemetryInfo.cs" />
     <Compile Include="TelemetryProvider.cs" />
