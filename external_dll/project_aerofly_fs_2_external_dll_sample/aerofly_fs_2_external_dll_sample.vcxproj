@@ -45,7 +45,7 @@
     <OutDir>$(USERPROFILE)\Documents\Aerofly FS 2\external_dll\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>.\x64\Release</OutDir>
+    <OutDir>$(USERPROFILE)\Documents\Aerofly FS 2\external_dll\</OutDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <PreBuildEvent>
