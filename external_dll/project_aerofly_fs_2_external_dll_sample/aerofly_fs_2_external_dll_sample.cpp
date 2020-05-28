@@ -491,10 +491,15 @@ F( WarningsWarningMute                  , "Warnings.WarningMute"                
 MESSAGE_LIST(TM_MESSAGE)
 
 static std::vector<tm_external_message>  MessageListReceive;
-static std::vector<tm_external_message>  MessageListCopy;
-static std::vector<tm_external_message>  MessageListDebugOutput;
-static std::mutex                        MessageListMutex;
-static double                            MessageDeltaTime = 0;
+
+
+static WSADATA wsaData;
+
+static SOCKET SendSocket;
+static sockaddr_in RecvAddr;
+static unsigned short Port;
+
+
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -565,29 +570,22 @@ extern "C"
 
 	__declspec(dllexport) bool Aerofly_FS_2_External_DLL_Init(const HINSTANCE Aerofly_FS_2_hInstance)
 	{
+		// Initialize Winsock
+		WSAStartup(MAKEWORD(2, 2), &wsaData);
+		SendSocket = INVALID_SOCKET;
+		Port = 4123;
+		SendSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+		RecvAddr.sin_family = AF_INET;
+		RecvAddr.sin_port = htons(Port);
+		RecvAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+		
 		return true;
 	}
 
 	__declspec(dllexport) void Aerofly_FS_2_External_DLL_Shutdown()
 	{
-	}
-
-	int resolvehelper(const char* hostname, int family, const char* service, sockaddr_storage* pAddr)
-	{
-		int result = 0;
-		addrinfo* result_list = NULL;
-		addrinfo hints = {};
-		hints.ai_family = family;
-		hints.ai_socktype = SOCK_DGRAM; // without this flag, getaddrinfo will return 3x the number of addresses (one for each socket type).
-		result = getaddrinfo(hostname, service, &hints, &result_list);
-		if (result == 0)
-		{
-			//ASSERT(result_list->ai_addrlen <= sizeof(sockaddr_in));
-			memcpy(pAddr, result_list->ai_addr, result_list->ai_addrlen);
-			freeaddrinfo(result_list);
-		}
-
-		return result;
 	}
 
 	__declspec(dllexport) void Aerofly_FS_2_External_DLL_Update(const tm_double         delta_time,
@@ -617,17 +615,13 @@ extern "C"
 		//
 		// parse the message list
 		//
-		tm_vector3d aircraft_position;
-		tm_double aircraft_altitude = -999;
 		tm_double aircraft_pitch = 0;
 		tm_double aircraft_bank = 0;
 		tm_double aircraft_indicated_airspeed = 0;
 		tm_double aircraft_groundspeed = 0;
 		tm_double aircraft_rateofturn = 0;
 		tm_vector3d aircraft_angularvelocity;
-		tm_vector3d aircraft_acceleration;
 		tm_vector3d aircraft_velocity;
-		tm_vector3d aircraft_gravity;
 
 		for (const auto& message : MessageListReceive) {
 			if (message.GetStringHash() == "Aircraft.Pitch") { aircraft_pitch = message.GetDouble(); }
@@ -647,17 +641,6 @@ extern "C"
 		//
 
 		if (!MessageListReceive.empty()) {
-			int result = 0;
-			SOCKET sock = socket(AF_INET, SOCK_DGRAM, 0);
-			char szIP[100] = "";
-			sockaddr_in addrListen = {}; // zero-int, sin_port is 0, which picks a random port for bind.
-			addrListen.sin_family = AF_INET;
-			result = bind(sock, (sockaddr*)&addrListen, sizeof(addrListen));
-			if (result == -1) { int lasterror = errno; }
-			sockaddr_storage addrDest = {};
-			result = resolvehelper("127.0.0.1", AF_INET, "4123", &addrDest); //4123 is the local plugin port
-			if (result != 0) { int lasterror = errno; }
-			tm_double altitude = -1;
 			char msg[256] = "";
 			sprintf_s(msg, "%lld;%lld;%lld;%lld;%lld;%lld;%lld;%lld;%lld;%lld;%lld",
 				(INT64)(aircraft_pitch * 1000),
@@ -673,7 +656,7 @@ extern "C"
 				(INT64)(aircraft_groundspeed * 1000)
 			);
 			int msg_length = (int)strlen(msg);
-			result = sendto(sock, msg, msg_length, 0, (sockaddr*)&addrDest, sizeof(addrDest));
+			sendto(SendSocket, msg, msg_length, 0, (SOCKADDR*)&RecvAddr, sizeof(RecvAddr));
 		}
 
 	}

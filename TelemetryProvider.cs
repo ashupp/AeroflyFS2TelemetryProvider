@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -73,30 +74,69 @@ namespace SimFeedback.telemetry
         TelemetryData lastTelemetryData = new TelemetryData();
         TelemetryData telemetryDataA = new TelemetryData();
         TelemetryData telemetryDataB = new TelemetryData();
-        Queue<TelemetryData> telemetryQueue = new Queue<TelemetryData>();
+        ConcurrentQueue<TelemetryData> telemetryQueue = new ConcurrentQueue<TelemetryData>();
         Stopwatch packetStopwatch = new Stopwatch();
         private bool deQueueStarted = false;
 
 
-        private void DequeueThread()
+
+        private void DequeueTimer()
         {
-            while (true)
+                var mmTimer = new System.Timers.Timer();
+                mmTimer.Interval = 10;
+
+                mmTimer.Elapsed += delegate (object o, ElapsedEventArgs args)
+                {
+                    DequeueThread(false);
+                };
+
+                mmTimer.Start();
+        }
+
+        private void DequeueThread(object o)
+        {
+            bool sleep = (bool)o;
+            try
             {
 
-                // Dieser Timer schlägt alle 10 Millisekunden zu. Hier sollten die neuesten Daten verfügbar sein.
-                File.AppendAllText("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " -  TIMER " + Environment.NewLine);
-                var telemetryQueueCount = telemetryQueue.Count;
+                while (true)
+                {
 
-                if (telemetryQueueCount > 0)
-                {
-                    File.AppendAllText("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " -  Queue Count " + telemetryQueueCount + Environment.NewLine);
-                    RaiseEvent(OnTelemetryUpdate, new TelemetryEventArgs(new AeroflyFS2TelemetryInfo(telemetryQueue.Dequeue(), lastTelemetryData)));
+                    // Dieser Timer schlägt alle 10 Millisekunden zu. Hier sollten die neuesten Daten verfügbar sein.
+                    MyLog("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " -  TIMER " + Environment.NewLine);
+                    var telemetryQueueCount = telemetryQueue.Count;
+
+                    if (telemetryQueueCount > 0)
+                    {
+                        MyLog("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " -  Queue Count " + telemetryQueueCount + Environment.NewLine);
+
+                        TelemetryData deQueuedTelemetryData = new TelemetryData();
+
+                        while (!deQueuedTelemetryData.isSet)
+                        {
+                            telemetryQueue.TryDequeue(out deQueuedTelemetryData);
+                        }
+
+                        MyLog("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " Dequeue erfolgreich" + Environment.NewLine);
+                        RaiseEvent(OnTelemetryUpdate, new TelemetryEventArgs(new AeroflyFS2TelemetryInfo(deQueuedTelemetryData, lastTelemetryData)));
+                        lastTelemetryData = deQueuedTelemetryData;
+                        if (!sleep)
+                        {
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        MyLog("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " -  Keine Daten mehr in Queue - verwende bestehenden Datensatz" + Environment.NewLine);
+                        RaiseEvent(OnTelemetryUpdate, new TelemetryEventArgs(new AeroflyFS2TelemetryInfo(lastTelemetryData, lastTelemetryData)));
+                    }
+                    if(sleep)
+                        Thread.Sleep(15);
                 }
-                else
-                {
-                    File.AppendAllText("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " -  Keine Daten mehr in Queue" + Environment.NewLine);
-                }
-                Thread.Sleep(10);
+            }
+            catch (Exception e)
+            {
+                MyLog("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " Error " + e.Message);
             }
         }
 
@@ -111,23 +151,6 @@ namespace SimFeedback.telemetry
             sw.Start();
 
 
-            /*
-            var mmTimer = new System.Timers.Timer();
-            mmTimer.Interval = 10;
-
-
-            mmTimer.Elapsed += delegate (object o, ElapsedEventArgs args)
-            {
-                DequeueThread
-            };*/
-
-
-
-            // Telemetriedaten entgegennehmen
-            // Eine Stoppuhr verwenden 
-
-
-            //mmTimer.Start();
             IsConnected = true;
             IsRunning = true;
 
@@ -162,7 +185,7 @@ namespace SimFeedback.telemetry
                     // Der Erste Datensatz ist noch nicht gesetzt
                     if (!telemetryDataA.isSet)
                     {
-                        File.AppendAllText("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " -  setzte telemetry data A" + Environment.NewLine);
+                        MyLog("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " -  setzte telemetry data A" + Environment.NewLine);
                         telemetryDataA = ParseReponse(Encoding.UTF8.GetString(socket.Receive(ref endpoint)));
                         packetStopwatch.Start();    // Erster Datensatz gelesen, warte auf zweiten
 
@@ -172,7 +195,7 @@ namespace SimFeedback.telemetry
                         // Der Erste Datensatz war bereits gesetzt.
                         packetStopwatch.Stop();
                         var elapsedMillisecondsBetweenPackets = packetStopwatch.ElapsedMilliseconds;
-                        File.AppendAllText("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " -  setzte telemetry data B (" + elapsedMillisecondsBetweenPackets + " Millisekunden später) " + Environment.NewLine);
+                        MyLog("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " -  setzte telemetry data B (" + elapsedMillisecondsBetweenPackets + " Millisekunden später) " + Environment.NewLine);
                         telemetryDataB = ParseReponse(Encoding.UTF8.GetString(socket.Receive(ref endpoint)));
 
                         // Hier alle fehlenden Daten dazwischen interpolieren
@@ -183,7 +206,7 @@ namespace SimFeedback.telemetry
                         foreach (var interpolatedElem in interpolatedElems)
                         {
                             telemetryQueue.Enqueue(interpolatedElem);
-                            File.AppendAllText("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " -  Füge generierten Datensatz ein..." + Environment.NewLine);
+                            MyLog("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " -  Füge generierten Datensatz ein..." + Environment.NewLine);
                         }
 
                         // Nach dem interpolieren Am Ende B nach A kopieren.
@@ -195,23 +218,22 @@ namespace SimFeedback.telemetry
                         //mmTimer.Start();
                         if (!deQueueStarted)
                         {
-                            File.AppendAllText("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " -  Starting Dequeue" + Environment.NewLine);
+                            MyLog("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " -  Starting Dequeue" + Environment.NewLine);
                             deQueueStarted = true;
 
-                            var m_ListeningThread = new Thread(DequeueThread);
-                            m_ListeningThread.IsBackground = false;
-                            m_ListeningThread.Start();
-
-                            //mmTimer.Start();
+                            //DequeueTimer();
+                            ParameterizedThreadStart pts = new ParameterizedThreadStart(DequeueThread);
+                            var dequeueThread = new Thread(pts);
+                            dequeueThread.IsBackground = true;
+                            dequeueThread.Start(true);
                         }
-
-
                     }
 
                     sw.Restart();
                 }
                 catch (Exception e)
                 {
+                    MyLog("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " -  errx " + e.Message);
                     LogError(Name + "TelemetryProvider Exception while processing data", e);
                     IsConnected = false;
                     IsRunning = false;
@@ -221,14 +243,18 @@ namespace SimFeedback.telemetry
             IsConnected = false;
             IsRunning = false;
         }
-        
+
+        private void MyLog(string dTestTxt, string nowTicks)
+        {
+            //LogDebug(nowTicks);
+        }
+
 
         private void Run()
         {
             var m_ListeningThread = new Thread(UdpListenerThread);
             m_ListeningThread.IsBackground = false;
             m_ListeningThread.Start();
-
 
         }
 
@@ -253,7 +279,7 @@ namespace SimFeedback.telemetry
                 interpolatedTelemetryData.Heave = (float) lerp(telemetryDataA.Heave, telemetryDataB.Heave, i / missingElems);
                 interpolatedTelemetryData.AirSpeed = (float) lerp(telemetryDataA.AirSpeed, telemetryDataB.AirSpeed, i / missingElems);
                 interpolatedTelemetryData.GroundSpeed = (float)lerp(telemetryDataA.GroundSpeed, telemetryDataB.GroundSpeed, i / missingElems);
-
+                interpolatedTelemetryData.isSet = true;
                 interpolatedElems.Add(interpolatedTelemetryData);
             }
             return interpolatedElems;
@@ -262,7 +288,7 @@ namespace SimFeedback.telemetry
 
         private TelemetryData ParseReponse(string resp)
         {
-            File.AppendAllText("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " - " + resp + Environment.NewLine);
+            MyLog("D:\\test.txt", DateTime.Now + ": " + DateTime.Now.Ticks + " - " + resp + Environment.NewLine);
             // TODO: telemetryData könnte auch direkt A oder B sein
             TelemetryData telemetryData = new TelemetryData();
             string[] lines = resp.Split(';');
