@@ -71,9 +71,6 @@
     <Folder Include="lib\" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Aerofly_FS_2_GamePlugin_Telemetry.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
     <Content Include="img\banner_aeroflyfs2.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

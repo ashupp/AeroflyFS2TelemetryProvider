@@ -5,8 +5,6 @@ VisualStudioVersion = 16.0.29424.173
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AeroflyFS2TelemetryProvider", "AeroflyFS2TelemetryProvider.csproj", "{CF4512C8-D007-420B-A50B-9B645D9BC817}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Aerofly_FS_2_GamePlugin_Telemetry", "external_dll\project_aerofly_fs_2_external_dll_sample\aerofly_fs_2_external_dll_sample.vcxproj", "{19E52193-A102-4A36-BF1E-84CEE2A08DA2}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -23,12 +21,6 @@ Global
 		{CF4512C8-D007-420B-A50B-9B645D9BC817}.Release|Any CPU.Build.0 = Release|Any CPU
 		{CF4512C8-D007-420B-A50B-9B645D9BC817}.Release|x64.ActiveCfg = Release|Any CPU
 		{CF4512C8-D007-420B-A50B-9B645D9BC817}.Release|x64.Build.0 = Release|Any CPU
-		{19E52193-A102-4A36-BF1E-84CEE2A08DA2}.Debug|Any CPU.ActiveCfg = Debug|x64
-		{19E52193-A102-4A36-BF1E-84CEE2A08DA2}.Debug|x64.ActiveCfg = Debug|x64
-		{19E52193-A102-4A36-BF1E-84CEE2A08DA2}.Debug|x64.Build.0 = Debug|x64
-		{19E52193-A102-4A36-BF1E-84CEE2A08DA2}.Release|Any CPU.ActiveCfg = Release|x64
-		{19E52193-A102-4A36-BF1E-84CEE2A08DA2}.Release|x64.ActiveCfg = Release|x64
-		{19E52193-A102-4A36-BF1E-84CEE2A08DA2}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

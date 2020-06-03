@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
@@ -12,7 +13,7 @@ namespace SimFeedback.telemetry
 {
     public sealed class TelemetryProvider : AbstractTelemetryProvider
     {
-
+        private const string sharedMemoryFile = @"Local\SimToolsAerofly_FS2";
         private const int _portNum = 4123;
         private const string _ipAddr = "127.0.0.1";
         private bool _isStopped = true;
@@ -25,7 +26,7 @@ namespace SimFeedback.telemetry
             Version = Assembly.LoadFrom(Assembly.GetExecutingAssembly().Location).GetName().Version.ToString();
             BannerImage = @"img\banner_aeroflyfs2.png";
             IconImage = @"img\icon_aeroflyfs2.png";
-            TelemetryUpdateFrequency = 60;
+            TelemetryUpdateFrequency = 30;
         }
 
         public override string Name => "aeroflyfs2";
@@ -63,42 +64,40 @@ namespace SimFeedback.telemetry
         private void Run()
         {
             TelemetryData lastTelemetryData = new TelemetryData();
-
-            UdpClient socket = new UdpClient {ExclusiveAddressUse = false};
-            socket.Client.Bind(new IPEndPoint(IPAddress.Parse(_ipAddr),_portNum));
-            var endpoint = new IPEndPoint(IPAddress.Parse(_ipAddr), _portNum);
             Stopwatch sw = new Stopwatch();
             sw.Start();
-
             while (!_isStopped)
             {
                 try
                 {
+                    TelemetryData telemetryData = new TelemetryData();
 
-                    // get data from game, 
-                    if (socket.Available == 0)
-                    {
-                        if (sw.ElapsedMilliseconds > 500)
-                        {
-                            IsRunning = false;
-                            IsConnected = false;
-                            Thread.Sleep(1000);
-                        }
-                        continue;
-                    }
+                    FS2DataRaw telemetryDataRaw = (FS2DataRaw)readSharedMemory(typeof(FS2DataRaw), sharedMemoryFile);
+
+                    telemetryData.Pitch = (float)telemetryDataRaw.FS2DataRawValues[0];
+                    telemetryData.Roll = (float) telemetryDataRaw.FS2DataRawValues[1];
+                    telemetryData.Yaw = (float)telemetryDataRaw.FS2DataRawValues[2];
+                    telemetryData.Surge = (float)telemetryDataRaw.FS2DataRawValues[3];
+                    telemetryData.Sway = (float)telemetryDataRaw.FS2DataRawValues[4];
+                    telemetryData.Heave = (float) telemetryDataRaw.FS2DataRawValues[5];
+                    telemetryData.AngularVelocityRoll = (float)telemetryDataRaw.FS2DataRawValues[6];
+                    telemetryData.AngularVelocityPitch = (float) telemetryDataRaw.FS2DataRawValues[7];
+                    telemetryData.AngularVelocityHeading = (float) telemetryDataRaw.FS2DataRawValues[8];
+
                     IsConnected = true;
-
-                    var received = socket.Receive(ref endpoint);
-                    var resp = Encoding.UTF8.GetString(received);
-                    TelemetryData telemetryData = ParseReponse(resp);
-
                     IsRunning = true;
 
-                    var args = new TelemetryEventArgs(new AeroflyFS2TelemetryInfo(telemetryData, lastTelemetryData));
+                    TelemetryEventArgs args = new TelemetryEventArgs(new TelemetryInfoElem(telemetryData, lastTelemetryData));
                     RaiseEvent(OnTelemetryUpdate, args);
                     lastTelemetryData = telemetryData;
-
                     sw.Restart();
+
+                    if (sw.ElapsedMilliseconds > 500)
+                    {
+                        IsRunning = false;
+                    }
+
+                    Thread.Sleep(SamplePeriod);
                 }
                 catch (Exception e)
                 {
@@ -111,23 +110,6 @@ namespace SimFeedback.telemetry
 
             IsConnected = false;
             IsRunning = false;
-        }
-
-        private TelemetryData ParseReponse(string resp)
-        {
-            TelemetryData telemetryData = new TelemetryData();
-            string[] lines = resp.Split(';');
-            if (lines.Length < 11) return telemetryData;
-            telemetryData.Pitch = float.Parse(lines[0], CultureInfo.InvariantCulture);
-            telemetryData.Roll = float.Parse(lines[1], CultureInfo.InvariantCulture);
-            telemetryData.Yaw = float.Parse(lines[2], CultureInfo.InvariantCulture);
-            telemetryData.Sway = float.Parse(lines[3], CultureInfo.InvariantCulture);
-            telemetryData.Surge = float.Parse(lines[5], CultureInfo.InvariantCulture);
-            telemetryData.Heave = float.Parse(lines[8], CultureInfo.InvariantCulture);
-            telemetryData.AirSpeed = float.Parse(lines[9], CultureInfo.InvariantCulture);
-            telemetryData.GroundSpeed = float.Parse(lines[10], CultureInfo.InvariantCulture);
-
-            return telemetryData;
         }
     }
 }

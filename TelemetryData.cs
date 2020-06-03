@@ -1,62 +1,50 @@
-﻿using Math = System.Math;
+﻿using System.Runtime.InteropServices;
+using Math = System.Math;
 
 namespace SimFeedback.telemetry
 {
+    #region SharedMemoryData
+    public struct FS2DataRaw
+    {
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 9)]
+        public double[] FS2DataRawValues;
+    }
+    #endregion
+
     public struct TelemetryData
     {
-        private float pitch;
-        private float roll;
-        private float yaw;
-        private float sway;
-        private float surge;
-        private float heave;
-
-        private float ax;
-        private float ay;
-        private float az;
-
+        #region Private members
+        private float _pitch;
+        private float _roll;
+        private float _yaw;
+        #endregion
 
         #region For SimFeedback Available Values
 
         public float Pitch
         {
-            get => LoopAngle(ConvertRadiansToDegrees(pitch / 1000),90);
-            set => pitch = value;
+            get => LoopAngle(ConvertRadiansToDegrees(_pitch),90);
+            set => _pitch = value;
         }
 
         public float Yaw
         {
-            get => ConvertRadiansToDegrees(yaw / 1000);
-            set => yaw = value;
+            get => ConvertRadiansToDegrees(_yaw / 1000);
+            set => _yaw = value;
         }
 
         public float Roll
         {
-            get => LoopAngle(ConvertRadiansToDegrees(roll / 1000), 90);
-            set => roll = value;
+            get => LoopAngle(ConvertRadiansToDegrees(_roll), 90);
+            set => _roll = value;
         }
 
-        
-        public float Heave
-        {
-            get => (heave / 1000) *-1 ;
-            set => heave = value;
-        }
-
-        public float Sway
-        {
-            get => (sway / 1000);
-            set => sway = value;
-        }
-
-        public float Surge
-        {
-            get => (surge);
-            set => surge = value;
-        }
-        
-        public float AirSpeed { get; set; }
-        public float GroundSpeed { get; set; }
+        public float Heave { get; set; }
+        public float Sway { get; set; }
+        public float Surge { get; set; }
+        public float AngularVelocityPitch { get; set; }
+        public float AngularVelocityRoll { get; set; }
+        public float AngularVelocityHeading { get; set; }
 
         #endregion
 

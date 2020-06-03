@@ -3,18 +3,18 @@ using System.Reflection;
 
 namespace SimFeedback.telemetry
 {
-    public class AeroflyFS2TelemetryInfo : EventArgs, TelemetryInfo
+    public class TelemetryInfoElem : EventArgs, TelemetryInfo
     {
         private TelemetryData _telemetryData;
 
-        public AeroflyFS2TelemetryInfo(TelemetryData telemetryData, TelemetryData lastTelemetryData)
+        public TelemetryInfoElem(TelemetryData telemetryData, TelemetryData lastTelemetryData)
         {
             _telemetryData = telemetryData;
         }
 
         public TelemetryValue TelemetryValueByName(string name)
         {
-            AeroflyFS2TelemetryValue tv;
+            TelemetryValueElem tv;
             switch (name)
             {
                 default:
@@ -34,7 +34,7 @@ namespace SimFeedback.telemetry
                     {
                         throw new UnknownTelemetryValueException(name);
                     }
-                    tv = new AeroflyFS2TelemetryValue(name, data);
+                    tv = new TelemetryValueElem(name, data);
                     object value = tv.Value;
                     if (value == null)
                     {

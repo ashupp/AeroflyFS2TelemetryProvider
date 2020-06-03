@@ -1,8 +1,8 @@
 ﻿namespace SimFeedback.telemetry
 {
-    public class AeroflyFS2TelemetryValue : AbstractTelemetryValue
+    public class TelemetryValueElem : AbstractTelemetryValue
     {
-        public AeroflyFS2TelemetryValue(string name, object value) : base()
+        public TelemetryValueElem(string name, object value) : base()
         {
             Name = name;
             Value = value;
